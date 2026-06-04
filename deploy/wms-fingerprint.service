@@ -1,0 +1,19 @@
+[Unit]
+Description=WMS Fingerprint Service (FastAPI + pyfingerprint)
+Documentation=file:///home/pi/wms-fingerprint-service/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/wms-fingerprint-service
+EnvironmentFile=/home/pi/wms-fingerprint-service/.env
+ExecStart=/home/pi/wms-fingerprint-service/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${SERVICE_PORT}
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

@@ -18,6 +18,20 @@ source .venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
 ```
 
+## Pornire automata (systemd)
+
+Inlocuieste in `deploy/wms-fingerprint.service` calea `/home/pi/wms-fingerprint-service` si userul `pi` daca proiectul sta altundeva sau rulezi sub alt cont.
+
+```bash
+sudo cp deploy/wms-fingerprint.service /etc/systemd/system/wms-fingerprint.service
+sudo systemctl daemon-reload
+sudo systemctl enable wms-fingerprint.service
+sudo systemctl start wms-fingerprint.service
+sudo systemctl status wms-fingerprint.service
+```
+
+Loguri: `journalctl -u wms-fingerprint.service -f`
+
 ## Test endpoint
 
 ```bash
