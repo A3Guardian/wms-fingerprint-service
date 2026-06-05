@@ -18,6 +18,48 @@ source .venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8100
 ```
 
+## Comanda locala `search` (loguri in terminal)
+
+Pentru verificare directa pe Raspberry Pi (fara HTTP), ruleaza:
+
+```bash
+source .venv/bin/activate
+python -m app.cli search
+```
+
+Exemple de loguri afisate:
+
+- `Astept amprenta...`
+- `Acces permis — pozitie 3, scor 127`
+- `Acces respins — amprenta necunoscuta`
+- `Timeout — incearca din nou.`
+
+Optiuni utile:
+
+```bash
+
+python -m app.cli search --once
+
+
+python -m app.cli search --deposit-id 1
+
+python -m app.cli search --no-image
+```
+
+Daca `SEND_EVENTS_TO_WMS=true` in `.env`, comanda trimite automat evenimentele la WMS, la fel ca endpointul `POST /search`.
+
+**Nota:** inrolarea amprentelor se face din WMS (asociata unui utilizator). Comanda CLI `search` este pentru verificare acces la usa; enroll-ul local din CLI nu leaga amprenta de un utilizator WMS.
+
+### Enroll din WMS (pas cu pas)
+
+WMS foloseste sesiuni in 3 pasi, astfel incat in interfata apar logurile in timp real:
+
+1. `POST /enroll/session` — porneste sesiunea
+2. `POST /enroll/session/{id}/first-scan` — prima scanare
+3. `POST /enroll/session/{id}/second-scan` — a doua scanare + salvare in WMS pentru utilizatorul selectat
+
+Endpointul vechi `POST /enroll` (o singura cerere) ramane disponibil pentru apeluri din WMS.
+
 ## Pornire automata (systemd)
 
 Inlocuieste in `deploy/wms-fingerprint.service` calea `/home/pi/wms-fingerprint-service` si userul `pi` daca proiectul sta altundeva sau rulezi sub alt cont.

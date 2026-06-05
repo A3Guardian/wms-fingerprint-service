@@ -63,9 +63,7 @@ class FingerprintService:
         response = httpx.post(endpoint, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
 
-    def enroll(self, include_image: bool = True) -> dict:
-        sensor = self._create_sensor()
-
+    def enroll_first_scan(self, sensor, include_image: bool = True) -> dict:
         self._wait_for_finger(sensor, settings.fingerprint_read_timeout_seconds)
         image_base64 = self._capture_image_base64(sensor) if include_image else None
         sensor.convertImage(0x01)
@@ -81,8 +79,22 @@ class FingerprintService:
                 response["fingerprint_image_mime"] = "image/png"
             return response
 
+        response = {"status": "first_scan_done"}
+        if image_base64:
+            response["fingerprint_image_base64"] = image_base64
+            response["fingerprint_image_mime"] = "image/png"
+        return response
+
+    def enroll_second_scan(
+        self,
+        sensor,
+        include_image: bool = True,
+        image_base64: Optional[str] = None,
+    ) -> dict:
         time.sleep(2)
         self._wait_for_finger(sensor, settings.fingerprint_read_timeout_seconds)
+        if include_image:
+            image_base64 = self._capture_image_base64(sensor)
         sensor.convertImage(0x02)
 
         if sensor.compareCharacteristics() == 0:
@@ -96,9 +108,30 @@ class FingerprintService:
             response["fingerprint_image_mime"] = "image/png"
         return response
 
-    def search(self, include_image: bool = True, deposit_id: Optional[int] = None) -> dict:
-        sensor = self._create_sensor()
+    def enroll_with_sensor(self, sensor, include_image: bool = True) -> dict:
+        first_result = self.enroll_first_scan(sensor, include_image=include_image)
+        if first_result["status"] == "already_exists":
+            return first_result
 
+        return self.enroll_second_scan(
+            sensor,
+            include_image=include_image,
+            image_base64=first_result.get("fingerprint_image_base64"),
+        )
+
+    def enroll(self, include_image: bool = True) -> dict:
+        sensor = self._create_sensor()
+        return self.enroll_with_sensor(sensor, include_image=include_image)
+
+    def create_sensor(self):
+        return self._create_sensor()
+
+    def search_with_sensor(
+        self,
+        sensor,
+        include_image: bool = True,
+        deposit_id: Optional[int] = None,
+    ) -> dict:
         self._wait_for_finger(sensor, settings.fingerprint_read_timeout_seconds)
         image_base64 = self._capture_image_base64(sensor) if include_image else None
         sensor.convertImage(0x01)
@@ -145,6 +178,14 @@ class FingerprintService:
             }
         )
         return response
+
+    def search(self, include_image: bool = True, deposit_id: Optional[int] = None) -> dict:
+        sensor = self._create_sensor()
+        return self.search_with_sensor(
+            sensor,
+            include_image=include_image,
+            deposit_id=deposit_id,
+        )
 
     def delete(self, position: int) -> dict:
         sensor = self._create_sensor()
