@@ -16,5 +16,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    @property
+    def wms_events_url(self) -> str:
+        return self.wms_api_base_url.rstrip("/") + self.wms_events_endpoint
+
 
 settings = Settings()

@@ -49,19 +49,48 @@ class FingerprintService:
 
         return base64.b64encode(png_buffer.getvalue()).decode("utf-8")
 
-    def _post_event_to_wms(self, payload: dict) -> None:
-        if not settings.send_events_to_wms:
-            return
+    def _build_wms_event_payload(self, **fields) -> dict:
+        return {key: value for key, value in fields.items() if value is not None}
 
-        endpoint = settings.wms_api_base_url.rstrip("/") + settings.wms_events_endpoint
+    def _post_event_to_wms(self, payload: dict) -> Optional[str]:
+        if not settings.send_events_to_wms:
+            return None
+
+        endpoint = settings.wms_events_url
         headers = {
             "X-Device-Key": settings.wms_device_secret,
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
 
-        response = httpx.post(endpoint, json=payload, headers=headers, timeout=10.0)
-        response.raise_for_status()
+        try:
+            response = httpx.post(endpoint, json=payload, headers=headers, timeout=10.0)
+            response.raise_for_status()
+        except httpx.ConnectError as exc:
+            return (
+                f"Conexiune refuzata la {endpoint}. "
+                "Verifica portul din WMS_API_BASE_URL "
+                "(ex: :8000 pentru php artisan serve). "
+                f"Detalii: {exc}"
+            )
+        except httpx.RequestError as exc:
+            return f"Nu s-a putut contacta WMS la {endpoint}: {exc}"
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text.strip() or exc.response.reason_phrase
+            return (
+                f"WMS a respins evenimentul ({exc.response.status_code}) "
+                f"la {endpoint}: {detail}"
+            )
+
+        return None
+
+    def _attach_wms_status(self, response: dict, wms_error: Optional[str]) -> dict:
+        if wms_error:
+            response["wms_event_sent"] = False
+            response["wms_event_error"] = wms_error
+        elif settings.send_events_to_wms:
+            response["wms_event_sent"] = True
+        return response
 
     def enroll_first_scan(self, sensor, include_image: bool = True) -> dict:
         self._wait_for_finger(sensor, settings.fingerprint_read_timeout_seconds)
@@ -148,36 +177,35 @@ class FingerprintService:
             if image_base64:
                 response["fingerprint_image_base64"] = image_base64
                 response["fingerprint_image_mime"] = "image/png"
-            self._post_event_to_wms(
-                {
-                    "device_code": settings.wms_device_id,
-                    "event_type": "verify_failed",
-                    "match_score": accuracy_score,
-                    "deposit_id": deposit_id,
-                    "fingerprint_image_base64": image_base64,
-                    "fingerprint_image_mime": "image/png" if image_base64 else None,
-                }
+            wms_error = self._post_event_to_wms(
+                self._build_wms_event_payload(
+                    device_code=settings.wms_device_id,
+                    event_type="verify_failed",
+                    match_score=accuracy_score,
+                    deposit_id=deposit_id,
+                    fingerprint_image_base64=image_base64,
+                    fingerprint_image_mime="image/png" if image_base64 else None,
+                )
             )
-            return response
+            return self._attach_wms_status(response, wms_error)
 
         response = {"match": True, "position": position_number, "accuracy_score": accuracy_score}
         if image_base64:
             response["fingerprint_image_base64"] = image_base64
             response["fingerprint_image_mime"] = "image/png"
 
-        self._post_event_to_wms(
-            {
-                "device_code": settings.wms_device_id,
-                "event_type": "verify_success",
-                "fingerprint_uid": str(position_number),
-                "matched_user_id": None,
-                "match_score": accuracy_score,
-                "deposit_id": deposit_id,
-                "fingerprint_image_base64": image_base64,
-                "fingerprint_image_mime": "image/png" if image_base64 else None,
-            }
+        wms_error = self._post_event_to_wms(
+            self._build_wms_event_payload(
+                device_code=settings.wms_device_id,
+                event_type="verify_success",
+                fingerprint_uid=str(position_number),
+                match_score=accuracy_score,
+                deposit_id=deposit_id,
+                fingerprint_image_base64=image_base64,
+                fingerprint_image_mime="image/png" if image_base64 else None,
+            )
         )
-        return response
+        return self._attach_wms_status(response, wms_error)
 
     def search(self, include_image: bool = True, deposit_id: Optional[int] = None) -> dict:
         sensor = self._create_sensor()
