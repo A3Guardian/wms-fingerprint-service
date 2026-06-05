@@ -80,11 +80,26 @@ Loguri: `journalctl -u wms-fingerprint.service -f`
 curl http://127.0.0.1:8100/health
 ```
 
+## Gestionare memorie senzor (CLI)
+
+```bash
+# cate amprente sunt salvate + pozitiile ocupate
+python -m app.cli templates
+
+# sterge o singura pozitie
+python -m app.cli delete 0
+
+# sterge TOATE amprentele din senzor
+python -m app.cli clear --yes
+```
+
 ## Endpointuri biometrice
 
+- `GET /templates` - numar amprente, capacitate, pozitii ocupate
 - `POST /enroll` - citeste aceeasi amprenta de 2 ori, salveaza template-ul si poate intoarce imaginea scanata (base64 PNG)
 - `POST /search` - cauta amprenta in baza senzorului si poate intoarce imaginea scanata (base64 PNG)
 - `DELETE /delete` - sterge un template dupa pozitie
+- `DELETE /templates` - sterge toate template-urile din senzor
 
 Exemple:
 
@@ -95,9 +110,11 @@ curl -X POST http://127.0.0.1:8100/enroll \
 curl -X POST http://127.0.0.1:8100/search \
   -H "Content-Type: application/json" \
   -d '{"include_image": true, "deposit_id": 1}'
+curl http://127.0.0.1:8100/templates
 curl -X DELETE http://127.0.0.1:8100/delete \
   -H "Content-Type: application/json" \
   -d '{"position": 3}'
+curl -X DELETE http://127.0.0.1:8100/templates
 ```
 
 Cand `SEND_EVENTS_TO_WMS=true`, endpointul `/search` trimite automat evenimentul la WMS (`POST /api/biometric/events`) incluzand si `fingerprint_image_base64`.

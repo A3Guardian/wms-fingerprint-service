@@ -88,9 +88,25 @@ def search(payload: ScanPayload) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/templates")
+def list_templates() -> dict:
+    try:
+        return fingerprint_service.list_templates()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.delete("/delete")
 def delete_template(payload: DeleteTemplatePayload) -> dict:
     try:
         return fingerprint_service.delete(payload.position)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/templates")
+def clear_templates() -> dict:
+    try:
+        return fingerprint_service.clear_all_templates()
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

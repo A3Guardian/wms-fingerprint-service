@@ -230,9 +230,41 @@ class FingerprintService:
             deposit_id=deposit_id,
         )
 
+    def _list_occupied_positions(self, sensor) -> list[int]:
+        positions: list[int] = []
+        for page in range(4):
+            usage_flags = sensor.getTemplateIndex(page)
+            for offset, is_used in enumerate(usage_flags):
+                if is_used:
+                    positions.append(page * 256 + offset)
+        return positions
+
+    def list_templates(self) -> dict:
+        sensor = self._create_sensor()
+        count = sensor.getTemplateCount()
+        capacity = sensor.getStorageCapacity()
+        positions = self._list_occupied_positions(sensor)
+        return {
+            "template_count": count,
+            "storage_capacity": capacity,
+            "positions": positions,
+        }
+
     def delete(self, position: int) -> dict:
         sensor = self._create_sensor()
         deleted = sensor.deleteTemplate(position)
         if not deleted:
             raise RuntimeError(f"Failed to delete template at position {position}.")
         return {"status": "deleted", "position": position}
+
+    def clear_all_templates(self) -> dict:
+        sensor = self._create_sensor()
+        previous_count = sensor.getTemplateCount()
+        cleared = sensor.clearDatabase()
+        if not cleared:
+            raise RuntimeError("Failed to clear fingerprint database on sensor.")
+        return {
+            "status": "cleared",
+            "deleted_count": previous_count,
+            "template_count": sensor.getTemplateCount(),
+        }

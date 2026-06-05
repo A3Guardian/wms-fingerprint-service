@@ -167,6 +167,75 @@ def run_search(
         time.sleep(pause_seconds)
 
 
+def run_templates() -> int:
+    service = FingerprintService()
+
+    _log("Citire memorie senzor...")
+    try:
+        result = service.list_templates()
+    except Exception as exc:
+        _log(f"Eroare: {exc}")
+        return 1
+
+    _log(f"Amprente in memorie: {result['template_count']}")
+    _log(f"Capacitate senzor: {result['storage_capacity']}")
+    positions = result.get("positions") or []
+    if positions:
+        _log(f"Pozitii ocupate: {', '.join(str(p) for p in positions)}")
+    else:
+        _log("Pozitii ocupate: (niciuna)")
+    return 0
+
+
+def run_clear(*, force: bool = False) -> int:
+    service = FingerprintService()
+
+    try:
+        summary = service.list_templates()
+    except Exception as exc:
+        _log(f"Eroare la citire senzor: {exc}")
+        return 1
+
+    count = summary["template_count"]
+    if count == 0:
+        _log("Memoria senzorului este deja goala.")
+        return 0
+
+    positions = summary.get("positions") or []
+    _log(f"Amprente in memorie: {count}")
+    if positions:
+        _log(f"Pozitii ocupate: {', '.join(str(p) for p in positions)}")
+
+    if not force:
+        _log("Stergere anulata. Ruleaza cu --yes pentru a confirma.")
+        return 2
+
+    try:
+        result = service.clear_all_templates()
+    except Exception as exc:
+        _log(f"Eroare la stergere: {exc}")
+        return 1
+
+    _log(
+        f"Memorie stearsa — {result['deleted_count']} amprente eliminate. "
+        f"Ramase: {result['template_count']}."
+    )
+    return 0
+
+
+def run_delete(position: int) -> int:
+    service = FingerprintService()
+
+    try:
+        result = service.delete(position)
+    except Exception as exc:
+        _log(f"Eroare: {exc}")
+        return 1
+
+    _log(f"Amprenta de la pozitia {result['position']} a fost stearsa.")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="wms-fingerprint",
@@ -206,10 +275,47 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Testeaza conexiunea catre WMS (fara senzor).",
     )
 
+    subparsers.add_parser(
+        "templates",
+        help="Afiseaza numarul si pozitiile amprentelor din senzor.",
+    )
+
+    clear_parser = subparsers.add_parser(
+        "clear",
+        help="Sterge toate amprentele din memoria senzorului.",
+    )
+    clear_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirma stergerea tuturor amprentelor.",
+    )
+
+    delete_parser = subparsers.add_parser(
+        "delete",
+        help="Sterge o amprenta dupa pozitie.",
+    )
+    delete_parser.add_argument(
+        "position",
+        type=int,
+        help="Pozitia din memoria senzorului (ex: 0, 1, 2).",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "check-wms":
         return run_check_wms()
+
+    if args.command == "templates":
+        return run_templates()
+
+    if args.command == "clear":
+        return run_clear(force=args.yes)
+
+    if args.command == "delete":
+        if args.position < 0:
+            _log("Pozitia trebuie sa fie >= 0.")
+            return 1
+        return run_delete(args.position)
 
     if args.command == "search":
         include_image = True if args.with_image else None
