@@ -230,24 +230,55 @@ class FingerprintService:
             deposit_id=deposit_id,
         )
 
-    def _list_occupied_positions(self, sensor) -> list[int]:
+    def _get_storage_capacity(self, sensor) -> int:
+        try:
+            return int(sensor.getStorageCapacity())
+        except Exception:
+            return 256
+
+    def _index_pages_for_capacity(self, capacity: int) -> range:
+        last_position = max(0, capacity - 1)
+        max_page = min(3, last_position // 256)
+        return range(max_page + 1)
+
+    def _list_occupied_positions_from_index(self, sensor, capacity: int) -> list[int]:
         positions: list[int] = []
-        for page in range(4):
+        for page in self._index_pages_for_capacity(capacity):
             usage_flags = sensor.getTemplateIndex(page)
             for offset, is_used in enumerate(usage_flags):
+                position = page * 256 + offset
+                if position >= capacity:
+                    continue
                 if is_used:
-                    positions.append(page * 256 + offset)
+                    positions.append(position)
         return positions
+
+    def _list_occupied_positions_by_probe(self, sensor, capacity: int) -> list[int]:
+        positions: list[int] = []
+        for position in range(capacity):
+            try:
+                if sensor.loadTemplate(position):
+                    positions.append(position)
+            except Exception:
+                continue
+        return positions
+
+    def _list_occupied_positions(self, sensor, capacity: int) -> tuple[list[int], str]:
+        try:
+            return self._list_occupied_positions_from_index(sensor, capacity), "index"
+        except Exception:
+            return self._list_occupied_positions_by_probe(sensor, capacity), "probe"
 
     def list_templates(self) -> dict:
         sensor = self._create_sensor()
         count = sensor.getTemplateCount()
-        capacity = sensor.getStorageCapacity()
-        positions = self._list_occupied_positions(sensor)
+        capacity = self._get_storage_capacity(sensor)
+        positions, positions_source = self._list_occupied_positions(sensor, capacity)
         return {
             "template_count": count,
             "storage_capacity": capacity,
             "positions": positions,
+            "positions_source": positions_source,
         }
 
     def delete(self, position: int) -> dict:

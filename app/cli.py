@@ -182,6 +182,11 @@ def run_templates() -> int:
     positions = result.get("positions") or []
     if positions:
         _log(f"Pozitii ocupate: {', '.join(str(p) for p in positions)}")
+    elif result["template_count"] > 0:
+        _log(
+            "Pozitii ocupate: nu au putut fi citite automat "
+            f"(metoda: {result.get('positions_source', 'necunoscuta')})."
+        )
     else:
         _log("Pozitii ocupate: (niciuna)")
     return 0
