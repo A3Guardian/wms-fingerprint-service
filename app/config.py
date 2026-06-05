@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     fingerprint_sensor_address: int = 0xFFFFFFFF
     fingerprint_sensor_password: int = 0x00000000
     fingerprint_read_timeout_seconds: int = 15
+    fingerprint_poll_interval_seconds: float = 0.02
+    search_include_image: bool = False
     wms_events_endpoint: str = "/api/biometric/events"
     send_events_to_wms: bool = False
 

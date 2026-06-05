@@ -96,7 +96,7 @@ def run_check_wms() -> int:
 def run_search(
     *,
     once: bool = False,
-    include_image: bool = True,
+    include_image: Optional[bool] = None,
     deposit_id: Optional[int] = None,
     pause_seconds: float = 1.5,
 ) -> int:
@@ -111,6 +111,12 @@ def run_search(
 
     _log("Senzor gata.")
     _log_wms_config()
+    if include_image is True or (
+        include_image is None and settings.search_include_image
+    ):
+        _log("Captura imagine: activa (scanare mai lenta).")
+    else:
+        _log("Captura imagine: dezactivata (mod rapid).")
     if once:
         _log("Astept amprenta (o singura scanare)...")
     else:
@@ -178,9 +184,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Ruleaza o singura scanare, apoi iese.",
     )
     search_parser.add_argument(
-        "--no-image",
+        "--with-image",
         action="store_true",
-        help="Nu captureaza imaginea (scanare mai rapida).",
+        help="Captureaza si trimite imaginea (mai lent, implicit dezactivat).",
     )
     search_parser.add_argument(
         "--deposit-id",
@@ -206,9 +212,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return run_check_wms()
 
     if args.command == "search":
+        include_image = True if args.with_image else None
         return run_search(
             once=args.once,
-            include_image=not args.no_image,
+            include_image=include_image,
             deposit_id=args.deposit_id,
             pause_seconds=args.pause,
         )

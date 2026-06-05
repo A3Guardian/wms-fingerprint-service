@@ -34,10 +34,16 @@ class FingerprintService:
 
     def _wait_for_finger(self, sensor, timeout_seconds: int) -> None:
         start = time.time()
+        poll_interval = settings.fingerprint_poll_interval_seconds
         while not sensor.readImage():
             if time.time() - start > timeout_seconds:
                 raise TimeoutError("Timeout waiting for fingerprint image.")
-            time.sleep(0.1)
+            time.sleep(poll_interval)
+
+    def _normalize_match_score(self, score: int) -> Optional[int]:
+        if score < 0:
+            return None
+        return min(int(score), 65535)
 
     def _capture_image_base64(self, sensor) -> str:
         with tempfile.NamedTemporaryFile(suffix=".bmp") as temp_bmp:
@@ -158,16 +164,25 @@ class FingerprintService:
     def search_with_sensor(
         self,
         sensor,
-        include_image: bool = True,
+        include_image: Optional[bool] = None,
         deposit_id: Optional[int] = None,
     ) -> dict:
+        capture_image = (
+            settings.search_include_image if include_image is None else include_image
+        )
+
         self._wait_for_finger(sensor, settings.fingerprint_read_timeout_seconds)
-        image_base64 = self._capture_image_base64(sensor) if include_image else None
         sensor.convertImage(0x01)
 
         result = sensor.searchTemplate()
         position_number = result[0]
         accuracy_score = result[1]
+        wms_match_score = self._normalize_match_score(accuracy_score)
+
+        image_base64 = None
+        if capture_image:
+            image_base64 = self._capture_image_base64(sensor)
+
         if position_number == -1:
             response = {
                 "match": False,
@@ -181,7 +196,7 @@ class FingerprintService:
                 self._build_wms_event_payload(
                     device_code=settings.wms_device_id,
                     event_type="verify_failed",
-                    match_score=accuracy_score,
+                    match_score=wms_match_score,
                     deposit_id=deposit_id,
                     fingerprint_image_base64=image_base64,
                     fingerprint_image_mime="image/png" if image_base64 else None,
@@ -199,7 +214,7 @@ class FingerprintService:
                 device_code=settings.wms_device_id,
                 event_type="verify_success",
                 fingerprint_uid=str(position_number),
-                match_score=accuracy_score,
+                match_score=wms_match_score,
                 deposit_id=deposit_id,
                 fingerprint_image_base64=image_base64,
                 fingerprint_image_mime="image/png" if image_base64 else None,
